@@ -1,0 +1,20 @@
+{
+  "name": "llm-fuzz-ci",
+  "version": "1.0.0",
+  "description": "Mark a vitest test as a fuzz target for LLM Fuzz CI.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs"
+  ],
+  "peerDependencies": {
+    "vitest": ">=1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NDV-tiime/llm-fuzz-ci.git"
+  }
+}

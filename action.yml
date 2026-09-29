@@ -1,0 +1,146 @@
+name: LLM Fuzz CI
+description: A coding agent writes adversarial inputs for your marked tests.
+author: NDV-tiime
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  test-paths:
+    description: Space-separated pytest paths to collect.
+    required: false
+    default: tests
+  working-directory:
+    description: Repository subdirectory to run in.
+    required: false
+    default: "."
+  runner:
+    description: "Test framework: pytest, vitest, or auto to pick from the paths."
+    required: false
+    default: auto
+  agent:
+    description: "Generator to use: codex or claude."
+    required: false
+    default: codex
+  model:
+    description: Model for the selected agent. Empty uses the agent's default.
+    required: false
+    default: ""
+  provider:
+    description: Codex model provider id. Use openrouter for the built-in shortcut.
+    required: false
+    default: ""
+  max-budget-usd:
+    description: Override every marker budget. Enforced on Claude Code only.
+    required: false
+    default: ""
+  timeout-seconds:
+    description: Maximum generation time per target.
+    required: false
+    default: "600"
+  show-usage:
+    description: Print the agent's token usage.
+    required: false
+    default: "false"
+  openai-api-key:
+    description: OpenAI API key, for agent codex.
+    required: false
+    default: ""
+  openrouter-api-key:
+    description: OpenRouter API key, for provider openrouter.
+    required: false
+    default: ""
+  anthropic-api-key:
+    description: Anthropic API key, for agent claude.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install LLM Fuzz CI
+      shell: bash
+      run: python -m pip install "$GITHUB_ACTION_PATH"
+
+    - name: Install Codex CLI
+      if: ${{ inputs.agent == 'codex' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/codex-bin"
+        curl -fsSL https://chatgpt.com/codex/install.sh \
+          | CODEX_NON_INTERACTIVE=1 CODEX_INSTALL_DIR="$RUNNER_TEMP/codex-bin" sh
+        echo "$RUNNER_TEMP/codex-bin" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/codex-bin/codex" --version
+
+    - name: Install Claude Code
+      if: ${{ inputs.agent == 'claude' }}
+      shell: bash
+      run: npm install --global @anthropic-ai/claude-code
+
+    - name: Collect targets
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: llm-fuzz-ci collect --runner "${{ inputs.runner }}" ${{ inputs.test-paths }}
+
+    - name: Snapshot the environment the tests will reuse
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        # The agent runs unsandboxed in this checkout. When generate and test
+        # share a job, the tests that judge its inputs run in this same
+        # environment, so record what it looked like before it started.
+        python -m pip freeze --disable-pip-version-check \
+          > "$RUNNER_TEMP/llm-fuzz-deps-before.txt" 2>/dev/null || true
+        npm ls --depth=0 --silent >> "$RUNNER_TEMP/llm-fuzz-deps-before.txt" 2>/dev/null || true
+
+    - name: Generate inputs
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        OPENAI_KEY: ${{ inputs.openai-api-key }}
+        OPENROUTER_KEY: ${{ inputs.openrouter-api-key }}
+        ANTHROPIC_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        set -euo pipefail
+        if [ -n "$OPENAI_KEY" ]; then export CODEX_API_KEY="$OPENAI_KEY"; fi
+        if [ -n "$OPENROUTER_KEY" ]; then export OPENROUTER_API_KEY="$OPENROUTER_KEY"; fi
+        if [ -n "$ANTHROPIC_KEY" ]; then export ANTHROPIC_API_KEY="$ANTHROPIC_KEY"; fi
+
+        extra=()
+        if [ -n "${{ inputs.model }}" ]; then extra+=(--model "${{ inputs.model }}"); fi
+        if [ -n "${{ inputs.provider }}" ]; then extra+=(--provider "${{ inputs.provider }}"); fi
+        if [ -n "${{ inputs.max-budget-usd }}" ]; then extra+=(--max-budget-usd "${{ inputs.max-budget-usd }}"); fi
+        if [ "${{ inputs.show-usage }}" = "true" ]; then extra+=(--show-usage); fi
+
+        llm-fuzz-ci generate \
+          --agent "${{ inputs.agent }}" \
+          --timeout-seconds "${{ inputs.timeout-seconds }}" \
+          --usage-report .llm-fuzz/reports/llm-usage.json \
+          "${extra[@]}"
+
+    - name: Put the workspace back as the tests will find it
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        # Undo anything the agent wrote. The exclude matters: a project that
+        # does not gitignore the corpus would otherwise have it deleted here.
+        if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          git checkout -- .
+          git clean -fdq -e .llm-fuzz
+        fi
+
+        python -m pip freeze --disable-pip-version-check \
+          > "$RUNNER_TEMP/llm-fuzz-deps-after.txt" 2>/dev/null || true
+        npm ls --depth=0 --silent >> "$RUNNER_TEMP/llm-fuzz-deps-after.txt" 2>/dev/null || true
+        if ! diff -q "$RUNNER_TEMP/llm-fuzz-deps-before.txt" \
+             "$RUNNER_TEMP/llm-fuzz-deps-after.txt" >/dev/null 2>&1; then
+          diff "$RUNNER_TEMP/llm-fuzz-deps-before.txt" \
+               "$RUNNER_TEMP/llm-fuzz-deps-after.txt" || true
+          echo "::error::The agent changed the installed packages, so a test run in"\
+            "this same job would not be judging your code as committed."\
+            "Split generate and test into two jobs, or pin your dependencies."
+          exit 1
+        fi

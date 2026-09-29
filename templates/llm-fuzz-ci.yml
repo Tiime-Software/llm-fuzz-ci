@@ -1,0 +1,71 @@
+# Copy to .github/workflows/llm-fuzz-ci.yml and edit the lines marked EDIT ME.
+# Everything else has a working default.
+
+name: LLM Fuzz CI
+
+on:
+  # Run it by hand from the Actions tab while you are setting it up.
+  workflow_dispatch:
+
+  # Once it works, uncomment one of these.
+  # schedule:
+  #   - cron: "17 2 * * *"   # nightly at 02:17 UTC
+  # pull_request:
+
+jobs:
+  llm-fuzz-ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # only needed when --create-issue is passed
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # EDIT ME — set your project up however you normally do. Poetry, uv, a
+      # Makefile, extra services: anything works. If pytest or vitest can import
+      # your code after these steps, so can the agent.
+      #
+      # For a Node project add actions/setup-node and `npm ci` here as well.
+      - run: pip install -e .
+
+      # 1. The agent reads your code and writes inputs into .llm-fuzz/cases
+      - uses: NDV-tiime/llm-fuzz-ci@v1
+        with:
+          # EDIT ME — where your marked tests live.
+          test-paths: tests
+
+          # codex (default) or claude. Leave model unset for the agent default.
+          agent: codex
+          # model: gpt-5.6-terra
+
+          # Match the key to the agent:
+          #   codex  -> openai-api-key, or openrouter-api-key with provider: openrouter
+          #   claude -> anthropic-api-key
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+
+      # 2. Your own test command. The plugin loads itself and reads
+      #    .llm-fuzz/cases; `-m llm_fuzz` keeps this step to the marked tests
+      #    so an unrelated failure cannot redden a fuzz run.
+      #    EDIT ME for Node:  npx vitest run .fuzz.
+      - run: pytest tests -m llm_fuzz
+        continue-on-error: true
+
+      # 3. Summary on the run page, an issue, and the exit code.
+      #    Drop --create-issue or --hard-fail to turn either off.
+      - run: llm-fuzz-ci report --create-issue --hard-fail
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # Keep the full report and the agent's transcript.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: llm-fuzz-ci
+          include-hidden-files: true
+          path: |
+            .llm-fuzz
+            !.llm-fuzz/reports/vitest-results

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-fuzz-ci"
+version = "0.1.0"
+description = "Generate adversarial test inputs with a coding agent; your pytest assertions judge them"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["fuzzing", "pytest", "security", "github-actions", "llm"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: Pytest",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Security",
+  "Topic :: Software Development :: Testing",
+]
+requires-python = ">=3.10"
+dependencies = [
+  "pytest>=8",
+]
+
+[project.urls]
+Homepage = "https://github.com/NDV-tiime/llm-fuzz-ci"
+Issues = "https://github.com/NDV-tiime/llm-fuzz-ci/issues"
+
+[project.scripts]
+llm-fuzz-ci = "llm_fuzz_ci.cli:main"
+
+[project.entry-points.pytest11]
+llm_fuzz_ci = "llm_fuzz_ci.pytest_plugin"
+
+[tool.setuptools.packages.find]
+include = ["llm_fuzz_ci*"]
+
+[tool.setuptools.package-data]
+llm_fuzz_ci = ["prompts/*.md"]
