@@ -24,8 +24,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/NDV-tiime/llm-fuzz-ci"
-Issues = "https://github.com/NDV-tiime/llm-fuzz-ci/issues"
+Homepage = "https://github.com/Tiime-Software/llm-fuzz-ci"
+Issues = "https://github.com/Tiime-Software/llm-fuzz-ci/issues"
 
 [project.scripts]
 llm-fuzz-ci = "llm_fuzz_ci.cli:main"

@@ -33,7 +33,7 @@ jobs:
       - run: pip install -e .
 
       # 1. The agent reads your code and writes inputs into .llm-fuzz/cases
-      - uses: NDV-tiime/llm-fuzz-ci@v1
+      - uses: Tiime-Software/llm-fuzz-ci@v1
         with:
           # EDIT ME — where your marked tests live.
           test-paths: tests

@@ -15,6 +15,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NDV-tiime/llm-fuzz-ci.git"
+    "url": "git+https://github.com/Tiime-Software/llm-fuzz-ci.git"
   }
 }

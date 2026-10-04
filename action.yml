@@ -1,6 +1,6 @@
 name: LLM Fuzz CI
 description: A coding agent writes adversarial inputs for your marked tests.
-author: NDV-tiime
+author: Tiime-Software
 
 branding:
   icon: shield

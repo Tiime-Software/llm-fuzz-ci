@@ -1,6 +1,6 @@
 # LLM Fuzz CI
 
-[![Tests](https://github.com/NDV-tiime/llm-fuzz-ci/actions/workflows/tests.yml/badge.svg)](https://github.com/NDV-tiime/llm-fuzz-ci/actions/workflows/tests.yml)
+[![Tests](https://github.com/Tiime-Software/llm-fuzz-ci/actions/workflows/tests.yml/badge.svg)](https://github.com/Tiime-Software/llm-fuzz-ci/actions/workflows/tests.yml)
 
 Fuzz your Python or JavaScript code with a coding agent, in GitHub Actions.
 
@@ -19,7 +19,7 @@ def test_foo(llm_fuzz_case):
     assert "<script>" not in result
 ```
 
-For vitest, `npm install --save-dev github:NDV-tiime/llm-fuzz-ci` and mark it the same way:
+For vitest, `npm install --save-dev github:Tiime-Software/llm-fuzz-ci` and mark it the same way:
 
 ```js
 import { expect } from "vitest";
@@ -50,9 +50,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install -e .          # your setup, however you do it
+      - run: pip install -e . # your setup, however you do it
 
-      - uses: NDV-tiime/llm-fuzz-ci@v1
+      - uses: Tiime-Software/llm-fuzz-ci@v1
         with:
           test-paths: tests
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -78,18 +78,18 @@ jobs:
 For a Node project:
 
 ```yaml
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-      - run: npm ci
+- uses: actions/setup-node@v6
+  with:
+    node-version: "22"
+- run: npm ci
 
-      - uses: NDV-tiime/llm-fuzz-ci@v1
-        with:
-          test-paths: tests
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+- uses: Tiime-Software/llm-fuzz-ci@v1
+  with:
+    test-paths: tests
+    openai-api-key: ${{ secrets.OPENAI_API_KEY }}
 
-      - run: npx vitest run .fuzz.
-        continue-on-error: true
+- run: npx vitest run .fuzz.
+  continue-on-error: true
 ```
 
 Run it from the Actions tab.
@@ -104,10 +104,10 @@ An annotated copy is in
 
 ## Marker options
 
-| Argument | Description |
-| --- | --- |
-| `budget_usd` | Per-test spend limit. |
-| `params` | Limit generation to these input keys. Without it the agent works out the whole signature from your harness. |
+| Argument     | Description                                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `budget_usd` | Per-test spend limit.                                                                                       |
+| `params`     | Limit generation to these input keys. Without it the agent works out the whole signature from your harness. |
 
 ```python
 @pytest.mark.llm_fuzz(budget_usd=0.5, params=["amount"])
@@ -118,30 +118,29 @@ def test_transfer(llm_fuzz_case):
 
 ## Configuration
 
-
-| Input | Default | Description |
-| --- | --- | --- |
-| `test-paths` | `tests` | paths holding marked tests |
-| `runner` | `auto` | `pytest`, `vitest`, or `auto` from the paths |
-| `working-directory` | `.` | subdirectory to run in |
-| `agent` | `codex` | `codex` or `claude` |
-| `model` | | model for the agent; empty uses its default |
-| `provider` | | Codex provider, for example `openrouter` |
-| `openai-api-key` | | key for `codex` |
-| `openrouter-api-key` | | key for `provider: openrouter` |
-| `anthropic-api-key` | | key for `claude` |
-| `max-budget-usd` | | override every marker budget |
-| `timeout-seconds` | `600` | maximum generation time per target |
-| `show-usage` | `false` | print the agent's token usage |
+| Input                | Default | Description                                  |
+| -------------------- | ------- | -------------------------------------------- |
+| `test-paths`         | `tests` | paths holding marked tests                   |
+| `runner`             | `auto`  | `pytest`, `vitest`, or `auto` from the paths |
+| `working-directory`  | `.`     | subdirectory to run in                       |
+| `agent`              | `codex` | `codex` or `claude`                          |
+| `model`              |         | model for the agent; empty uses its default  |
+| `provider`           |         | Codex provider, for example `openrouter`     |
+| `openai-api-key`     |         | key for `codex`                              |
+| `openrouter-api-key` |         | key for `provider: openrouter`               |
+| `anthropic-api-key`  |         | key for `claude`                             |
+| `max-budget-usd`     |         | override every marker budget                 |
+| `timeout-seconds`    | `600`   | maximum generation time per target           |
+| `show-usage`         | `false` | print the agent's token usage                |
 
 `llm-fuzz-ci report`, step 3:
 
-| Flag | Description |
-| --- | --- |
-| `--create-issue` | open an issue when an input failed; needs `GITHUB_TOKEN` and `issues: write` |
-| `--issue-assignees` | comma-separated logins; GitHub emails an assignee |
-| `--issue-labels` | comma-separated labels |
-| `--hard-fail` | exit non-zero when an input failed |
+| Flag                | Description                                                                  |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `--create-issue`    | open an issue when an input failed; needs `GITHUB_TOKEN` and `issues: write` |
+| `--issue-assignees` | comma-separated logins; GitHub emails an assignee                            |
+| `--issue-labels`    | comma-separated labels                                                       |
+| `--hard-fail`       | exit non-zero when an input failed                                           |
 
 Both are off unless you pass them, so the same command works for a run you only
 want to look at.
@@ -153,14 +152,14 @@ its outcome, each failing input in full with the assertion that fired.
 
 The `llm-fuzz-ci` artifact holds the whole run:
 
-| | |
-| --- | --- |
-| `cases/` | every input the agent wrote, as JSON Lines |
-| `targets.json` | the marked tests it was pointed at |
-| `reports/llm-fuzz-ci-report.md` | the same summary, unfolded |
-| `reports/test-report.json` | one record per input, for processing |
-| `reports/llm-usage.json` | tokens spent |
-| `reports/agent-trace/` | per test, what the agent reasoned, ran, and saw |
+|                                 |                                                 |
+| ------------------------------- | ----------------------------------------------- |
+| `cases/`                        | every input the agent wrote, as JSON Lines      |
+| `targets.json`                  | the marked tests it was pointed at              |
+| `reports/llm-fuzz-ci-report.md` | the same summary, unfolded                      |
+| `reports/test-report.json`      | one record per input, for processing            |
+| `reports/llm-usage.json`        | tokens spent                                    |
+| `reports/agent-trace/`          | per test, what the agent reasoned, ran, and saw |
 
 All of the following are off unless you turn them on.
 
@@ -176,10 +175,10 @@ Set `hard-fail: false` when you do that, or the job dies before your step runs.
 
 ## Agents
 
-| Agent | Key |
-| --- | --- |
+| Agent             | Key                                                                   |
+| ----------------- | --------------------------------------------------------------------- |
 | `codex` (default) | `openai-api-key`, or `openrouter-api-key` with `provider: openrouter` |
-| `claude` | `anthropic-api-key` |
+| `claude`          | `anthropic-api-key`                                                   |
 
 OpenAI's safety classifier sometimes refuses this workload with `flagged for possible cybersecurity risk`. `agent: claude` is the quickest way past it; [Trusted Access for Cyber](https://chatgpt.com/cyber) is the durable one.
 
@@ -188,7 +187,7 @@ OpenAI's safety classifier sometimes refuses this workload with `flagged for pos
 The action wraps a CLI you can run locally.
 
 ```bash
-pip install "git+https://github.com/NDV-tiime/llm-fuzz-ci.git@v1"
+pip install "git+https://github.com/Tiime-Software/llm-fuzz-ci.git@v1"
 export CODEX_API_KEY=...
 
 llm-fuzz-ci collect tests                                   # find marked tests
@@ -203,6 +202,10 @@ llm-fuzz-ci summary                                         # render the report
 Choosing what to fuzz and what to assert is the part that takes thought.
 [`skills/SKILL.md`](skills/SKILL.md) is an agent skill for exactly that: it picks
 out the functions worth fuzzing, writes the marked tests.
+
+## Authors
+
+[Louis Abraham](https://louisabraham.github.io/) and Nicolas Devatine.
 
 ## License
 
