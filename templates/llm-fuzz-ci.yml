@@ -13,11 +13,10 @@ on:
   # pull_request:
 
 jobs:
-  llm-fuzz-ci:
+  generate:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write # only needed when --create-issue is passed
 
     steps:
       - uses: actions/checkout@v7
@@ -32,7 +31,6 @@ jobs:
       # For a Node project add actions/setup-node and `npm ci` here as well.
       - run: pip install -e .
 
-      # 1. The agent reads your code and writes inputs into .llm-fuzz/cases
       - uses: Tiime-Software/llm-fuzz-ci@v1
         with:
           # EDIT ME — where your marked tests live.
@@ -47,20 +45,49 @@ jobs:
           #   claude -> anthropic-api-key
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
 
-      # 2. Your own test command. The plugin loads itself and reads
-      #    .llm-fuzz/cases; `-m llm_fuzz` keeps this step to the marked tests
-      #    so an unrelated failure cannot redden a fuzz run.
-      #    EDIT ME for Node:  npx vitest run .fuzz.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: llm-fuzz-ci-cases
+          include-hidden-files: true
+          path: .llm-fuzz
+          retention-days: 1
+
+  test:
+    needs: generate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # only needed when --create-issue is passed
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # EDIT ME — the same setup as the generate job.
+      - run: pip install -e .
+
+      # No action runs here, so the pytest plugin and the CLI are not installed.
+      - run: pip install "git+https://github.com/Tiime-Software/llm-fuzz-ci.git@v1"
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: llm-fuzz-ci-cases
+          path: .llm-fuzz
+
+      # Your own test command. The plugin reads .llm-fuzz/cases; `-m llm_fuzz`
+      # keeps this to the marked tests, so an unrelated failure cannot redden a
+      # fuzz run.  EDIT ME for Node:  npx vitest run .fuzz.
       - run: pytest tests -m llm_fuzz
         continue-on-error: true
 
-      # 3. Summary on the run page, an issue, and the exit code.
-      #    Drop --create-issue or --hard-fail to turn either off.
+      # Summary on the run page, an issue, and the exit code.
+      # Drop --create-issue or --hard-fail to turn either off.
       - run: llm-fuzz-ci report --create-issue --hard-fail
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      # Keep the full report and the agent's transcript.
       - uses: actions/upload-artifact@v7
         if: always()
         with:

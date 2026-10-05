@@ -84,17 +84,6 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: llm-fuzz-ci collect --runner "${{ inputs.runner }}" ${{ inputs.test-paths }}
 
-    - name: Snapshot the environment the tests will reuse
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        # The agent runs unsandboxed in this checkout. When generate and test
-        # share a job, the tests that judge its inputs run in this same
-        # environment, so record what it looked like before it started.
-        python -m pip freeze --disable-pip-version-check \
-          > "$RUNNER_TEMP/llm-fuzz-deps-before.txt" 2>/dev/null || true
-        npm ls --depth=0 --silent >> "$RUNNER_TEMP/llm-fuzz-deps-before.txt" 2>/dev/null || true
-
     - name: Generate inputs
       shell: bash
       working-directory: ${{ inputs.working-directory }}
@@ -119,28 +108,3 @@ runs:
           --timeout-seconds "${{ inputs.timeout-seconds }}" \
           --usage-report .llm-fuzz/reports/llm-usage.json \
           "${extra[@]}"
-
-    - name: Put the workspace back as the tests will find it
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: |
-        set -euo pipefail
-        # Undo anything the agent wrote. The exclude matters: a project that
-        # does not gitignore the corpus would otherwise have it deleted here.
-        if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-          git checkout -- .
-          git clean -fdq -e .llm-fuzz
-        fi
-
-        python -m pip freeze --disable-pip-version-check \
-          > "$RUNNER_TEMP/llm-fuzz-deps-after.txt" 2>/dev/null || true
-        npm ls --depth=0 --silent >> "$RUNNER_TEMP/llm-fuzz-deps-after.txt" 2>/dev/null || true
-        if ! diff -q "$RUNNER_TEMP/llm-fuzz-deps-before.txt" \
-             "$RUNNER_TEMP/llm-fuzz-deps-after.txt" >/dev/null 2>&1; then
-          diff "$RUNNER_TEMP/llm-fuzz-deps-before.txt" \
-               "$RUNNER_TEMP/llm-fuzz-deps-after.txt" || true
-          echo "::error::The agent changed the installed packages, so a test run in"\
-            "this same job would not be judging your code as committed."\
-            "Split generate and test into two jobs, or pin your dependencies."
-          exit 1
-        fi

@@ -39,28 +39,51 @@ on:
   workflow_dispatch:
 
 jobs:
-  llm-fuzz-ci:
+  generate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install -e . # your setup, however you do it
+      - run: pip install -e .          # your setup
 
-      - uses: Tiime-Software/llm-fuzz-ci@v1
+      - uses: NDV-tiime/llm-fuzz-ci@v1
         with:
           test-paths: tests
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: llm-fuzz-ci-cases
+          include-hidden-files: true
+          path: .llm-fuzz
+          retention-days: 1
+
+  test:
+    needs: generate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -e .          # the same setup again
+
+      # no action here, so the plugin and the CLI are not yet installed
+      - run: pip install "git+https://github.com/Tiime-Software/llm-fuzz-ci.git@v1"
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: llm-fuzz-ci-cases
+          path: .llm-fuzz
+
       - run: pytest tests -m llm_fuzz
         continue-on-error: true
 
-      # summary, issue, exit code
       - run: llm-fuzz-ci report --create-issue --hard-fail
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -75,29 +98,10 @@ jobs:
             !.llm-fuzz/reports/vitest-results
 ```
 
-For a Node project:
-
-```yaml
-- uses: actions/setup-node@v6
-  with:
-    node-version: "22"
-- run: npm ci
-
-- uses: Tiime-Software/llm-fuzz-ci@v1
-  with:
-    test-paths: tests
-    openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-
-- run: npx vitest run .fuzz.
-  continue-on-error: true
-```
+For a Node project, add `actions/setup-node` and `npm ci` to both jobs, and make
+the test command `npx vitest run .fuzz.`.
 
 Run it from the Actions tab.
-
-Set the job up the way you would for any other test run: dependencies in steps
-before it, databases and queues in `services`, configuration in the job's `env`.
-
-The test step needs no flags for the corpus: the plugin loads through its entry point and reads `.llm-fuzz/cases`. What it does need is a way to run only the marked tests, or an unrelated failure reddens a fuzz run. `-m llm_fuzz` does that for pytest. vitest has no markers, so narrow by filename — `npx vitest run .fuzz.` matches any path containing `.fuzz.`, which is why the examples are named `redirect.fuzz.test.mjs`. A dedicated directory works as well: `npx vitest run tests/fuzz`.
 
 An annotated copy is in
 [`templates/llm-fuzz-ci.yml`](templates/llm-fuzz-ci.yml).
