@@ -184,8 +184,6 @@ Set `hard-fail: false` when you do that, or the job dies before your step runs.
 | `codex` (default) | `openai-api-key`, or `openrouter-api-key` with `provider: openrouter` |
 | `claude`          | `anthropic-api-key`                                                   |
 
-OpenAI's safety classifier sometimes refuses this workload with `flagged for possible cybersecurity risk`. `agent: claude` is the quickest way past it; [Trusted Access for Cyber](https://chatgpt.com/cyber) is the durable one.
-
 ## Command line
 
 The action wraps a CLI you can run locally.
