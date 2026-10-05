@@ -2,6 +2,8 @@
 
 [![Tests](https://github.com/Tiime-Software/llm-fuzz-ci/actions/workflows/tests.yml/badge.svg)](https://github.com/Tiime-Software/llm-fuzz-ci/actions/workflows/tests.yml)
 
+[Blog post](https://tiime-software.github.io/blog/llm-fuzz-ci/)
+
 Fuzz your Python or JavaScript code with a coding agent, in GitHub Actions.
 
 Mark a test. The agent reads your code and writes adversarial inputs for it.
