@@ -50,7 +50,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -e .          # your setup
 
-      - uses: NDV-tiime/llm-fuzz-ci@v1
+      - uses: Tiime-Software/llm-fuzz-ci@v1
         with:
           test-paths: tests
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
