@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-fuzz-ci"
-version = "0.1.0"
+version = "1.0.0"
 description = "Generate adversarial test inputs with a coding agent; your pytest assertions judge them"
 readme = "README.md"
 license = "MIT"
