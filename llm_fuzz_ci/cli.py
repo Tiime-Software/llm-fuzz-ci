@@ -54,7 +54,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-budget-usd",
         type=float,
         default=None,
-        help="Override every marker budget. Enforced on Claude Code only.",
+        help="Override every marker budget.",
+    )
+    generate.add_argument(
+        "--price-input",
+        type=float,
+        default=None,
+        help="Codex only: model price, USD per million input tokens. Needed to enforce a budget.",
+    )
+    generate.add_argument(
+        "--price-output",
+        type=float,
+        default=None,
+        help="Codex only: model price, USD per million output tokens. Needed to enforce a budget.",
     )
     generate.add_argument("--timeout-seconds", type=int, default=600)
     generate.add_argument(
@@ -216,18 +228,24 @@ def cmd_generate(args: argparse.Namespace) -> int:
         f" — one agent run each.",
         flush=True,
     )
-    result = generate_cases(
-        targets,
-        agent=args.agent,
-        repo_root=Path.cwd(),
-        model=args.model,
-        provider=args.provider,
-        max_turns=args.max_turns,
-        max_budget_usd=args.max_budget_usd,
-        timeout_seconds=args.timeout_seconds,
-        capture_usage=args.show_usage or bool(args.usage_report),
-        trace_dir=Path(TRACES),
-    )
+    try:
+        result = generate_cases(
+            targets,
+            agent=args.agent,
+            repo_root=Path.cwd(),
+            model=args.model,
+            provider=args.provider,
+            max_turns=args.max_turns,
+            max_budget_usd=args.max_budget_usd,
+            price_input_per_million=args.price_input,
+            price_output_per_million=args.price_output,
+            timeout_seconds=args.timeout_seconds,
+            capture_usage=args.show_usage or bool(args.usage_report),
+            trace_dir=Path(TRACES),
+        )
+    except ValueError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 2
 
     dropped = clear_corpus(args.corpus_dir, targets)
     written = write_cases(args.corpus_dir, result.cases)

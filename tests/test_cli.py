@@ -13,6 +13,8 @@ def generate_args(tmp_path, **overrides):
         provider=None,
         max_turns=None,
         max_budget_usd=None,
+        price_input=None,
+        price_output=None,
         timeout_seconds=600,
         show_usage=False,
         usage_report=None,

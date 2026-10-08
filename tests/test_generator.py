@@ -353,6 +353,8 @@ def test_one_failing_target_keeps_the_others(monkeypatch):
         ],
         agent="codex",
         repo_root=".",
+        price_input_per_million=1.0,
+        price_output_per_million=2.0,
     )
 
     assert [case.target_id for case in result.cases] == ["first", "last"]
@@ -501,3 +503,67 @@ def test_the_prompt_refuses_an_answer_written_before_reading(tmp_path):
     )
 
     assert "Do not answer before you have read both." in prompt
+
+
+def test_codex_budget_is_converted_to_weighted_tokens_in_millionths_of_a_dollar(tmp_path):
+    cmd = generator.codex_command(
+        help_text=HELP_WITH_BYPASS,
+        schema_path=Path("s.json"),
+        output_path=Path("o.json"),
+        model=None,
+        provider=None,
+        capture_usage=False,
+        budget_usd=0.5,
+        prices=(0.68, 2.09),
+    )
+
+    assert "features.rollout_budget.enabled=true" in cmd
+    assert "features.rollout_budget.limit_tokens=500000" in cmd
+    assert "features.rollout_budget.prefill_token_weight=0.68" in cmd
+    assert "features.rollout_budget.sampling_token_weight=2.09" in cmd
+    assert "features.rollout_budget.reminder_at_remaining_tokens=[50000]" in cmd
+
+
+def test_codex_without_a_budget_sets_no_token_limit():
+    assert not any("rollout_budget" in part for part in codex_argv(HELP_WITH_BYPASS))
+
+
+def test_codex_with_a_budget_and_no_prices_fails_before_any_agent_runs(monkeypatch):
+    def never(*args, **kwargs):
+        raise AssertionError("an agent ran")
+
+    monkeypatch.setattr(generator, "generate_with_codex", never)
+
+    with pytest.raises(ValueError, match="--price-input and --price-output"):
+        generate_cases(
+            [FuzzTarget(id="divide", target="app:divide", budget_usd=0.25)],
+            agent="codex",
+            repo_root=".",
+            price_input_per_million=1.0,
+        )
+
+
+def test_codex_without_any_budget_needs_no_prices(monkeypatch):
+    monkeypatch.setattr(
+        generator, "generate_with_codex", lambda *a, **k: generator.Generated([])
+    )
+
+    result = generate_cases(
+        [FuzzTarget(id="divide", target="app:divide")], agent="codex", repo_root="."
+    )
+
+    assert result.failures == {}
+
+
+def test_claude_needs_no_prices(monkeypatch):
+    monkeypatch.setattr(
+        generator, "generate_with_claude", lambda *a, **k: generator.Generated([])
+    )
+
+    result = generate_cases(
+        [FuzzTarget(id="divide", target="app:divide", budget_usd=0.25)],
+        agent="claude",
+        repo_root=".",
+    )
+
+    assert result.failures == {}

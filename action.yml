@@ -32,7 +32,15 @@ inputs:
     required: false
     default: ""
   max-budget-usd:
-    description: Override every marker budget. Enforced on Claude Code only.
+    description: Override every marker budget.
+    required: false
+    default: ""
+  price-input-per-million:
+    description: "Codex only: model price in USD per million input tokens. Needed to enforce a budget."
+    required: false
+    default: ""
+  price-output-per-million:
+    description: "Codex only: model price in USD per million output tokens. Needed to enforce a budget."
     required: false
     default: ""
   timeout-seconds:
@@ -101,6 +109,8 @@ runs:
         if [ -n "${{ inputs.model }}" ]; then extra+=(--model "${{ inputs.model }}"); fi
         if [ -n "${{ inputs.provider }}" ]; then extra+=(--provider "${{ inputs.provider }}"); fi
         if [ -n "${{ inputs.max-budget-usd }}" ]; then extra+=(--max-budget-usd "${{ inputs.max-budget-usd }}"); fi
+        if [ -n "${{ inputs.price-input-per-million }}" ]; then extra+=(--price-input "${{ inputs.price-input-per-million }}"); fi
+        if [ -n "${{ inputs.price-output-per-million }}" ]; then extra+=(--price-output "${{ inputs.price-output-per-million }}"); fi
         if [ "${{ inputs.show-usage }}" = "true" ]; then extra+=(--show-usage); fi
 
         llm-fuzz-ci generate \

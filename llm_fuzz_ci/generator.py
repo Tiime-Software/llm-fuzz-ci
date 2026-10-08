@@ -38,6 +38,8 @@ def generate_cases(
     provider: str | None = None,
     max_turns: int | None = None,
     max_budget_usd: float | None = None,
+    price_input_per_million: float | None = None,
+    price_output_per_million: float | None = None,
     timeout_seconds: int = 600,
     capture_usage: bool = False,
     trace_dir: Path | None = None,
@@ -58,6 +60,10 @@ def generate_cases(
     if agent not in {"codex", "claude"}:
         raise ValueError(f"Unsupported agent: {agent}")
 
+    prices = codex_prices(
+        agent, target_list, price_input_per_million, price_output_per_million
+    )
+
     cases: list[FuzzCase] = []
     skipped: list[str] = []
     failures: dict[str, str] = {}
@@ -73,6 +79,7 @@ def generate_cases(
                     root,
                     model=model,
                     provider=provider,
+                    prices=prices,
                     timeout_seconds=timeout_seconds,
                     capture_usage=capture_usage,
                     trace_dir=trace_dir,
@@ -138,6 +145,33 @@ def input_keys_rule(target: FuzzTarget) -> str:
     )
 
 
+def codex_prices(
+    agent: str,
+    targets: list[FuzzTarget],
+    price_input: float | None,
+    price_output: float | None,
+) -> tuple[float, float] | None:
+    """USD per million input and output tokens, when Codex must enforce a budget.
+
+    Codex counts tokens, not dollars, so a dollar budget means nothing to it
+    without the model's prices. Failing here, before any agent runs, is cheaper
+    than finding out a budget was never enforced.
+    """
+    for name, value in (("--price-input", price_input), ("--price-output", price_output)):
+        if value is not None and value <= 0:
+            raise ValueError(f"{name} must be greater than 0")
+    if agent != "codex" or not any(target.budget_usd is not None for target in targets):
+        return None
+    if price_input is None or price_output is None:
+        raise ValueError(
+            "Codex counts tokens, not dollars. To enforce budget_usd it needs the "
+            "model's prices: set --price-input and --price-output (USD per million "
+            "tokens), or the action's price-input-per-million and "
+            "price-output-per-million inputs."
+        )
+    return price_input, price_output
+
+
 def merge_usage(total: LLMUsage | None, item: LLMUsage | None) -> LLMUsage | None:
     if item is None:
         return total
@@ -183,6 +217,7 @@ def generate_with_codex(
     timeout_seconds: int,
     capture_usage: bool,
     trace_dir: Path | None,
+    prices: tuple[float, float] | None = None,
 ) -> Generated:
     help_text = require_codex()
     prompt = build_prompt(target, repo_root)
@@ -199,6 +234,8 @@ def generate_with_codex(
             model=model,
             provider=provider,
             capture_usage=capture_usage,
+            budget_usd=target.budget_usd,
+            prices=prices,
         )
         cmd.append(prompt)
         env = codex_env(provider)
@@ -316,6 +353,8 @@ def codex_command(
     model: str | None,
     provider: str | None,
     capture_usage: bool,
+    budget_usd: float | None = None,
+    prices: tuple[float, float] | None = None,
 ) -> list[str]:
     cmd = ["codex", "exec"]
     has_config = supports_flag(help_text, "--config")
@@ -356,7 +395,35 @@ def codex_command(
         cmd.append("--json")
     if has_config:
         cmd.extend(["--config", 'model_reasoning_summary="detailed"'])
+    if budget_usd is not None and prices is not None:
+        if not has_config:
+            raise RuntimeError(
+                "Enforcing a budget needs a Codex CLI that supports "
+                "`codex exec --config`. Update Codex CLI and retry."
+            )
+        for item in rollout_budget_config(budget_usd, *prices):
+            cmd.extend(["--config", item])
     return cmd
+
+
+def rollout_budget_config(
+    budget_usd: float, price_input: float, price_output: float
+) -> list[str]:
+    """Codex's token budget, rescaled so that one unit is one millionth of a dollar.
+
+    Each token counts for its price per million, so the limit is the budget in
+    millionths of a dollar. Cached input is billed lower than this assumes, which
+    makes the limit stop a little early, never late.
+    """
+    limit = max(1, round(budget_usd * 1_000_000))
+    return [
+        "features.rollout_budget.enabled=true",
+        f"features.rollout_budget.limit_tokens={limit}",
+        f"features.rollout_budget.prefill_token_weight={price_input}",
+        f"features.rollout_budget.sampling_token_weight={price_output}",
+        f"features.rollout_budget.reminder_at_remaining_tokens=[{max(1, limit // 10)}]",
+        "suppress_unstable_features_warning=true",
+    ]
 
 
 def append_provider_config(cmd: list[str], provider: str) -> None:
