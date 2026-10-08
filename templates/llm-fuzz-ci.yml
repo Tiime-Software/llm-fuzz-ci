@@ -36,14 +36,29 @@ jobs:
           # EDIT ME — where your marked tests live.
           test-paths: tests
 
-          # codex (default) or claude. Leave model unset for the agent default.
+          # codex (default) or claude.
           agent: codex
-          # model: gpt-5.6-terra
+          # EDIT ME — pin the model, so the prices below always match it.
+          model: gpt-6-astra
 
           # Match the key to the agent:
           #   codex  -> openai-api-key, or openrouter-api-key with provider: openrouter
           #   claude -> anthropic-api-key
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+
+          # Another model through OpenRouter: replace the openai-api-key line
+          # above with these.
+          # provider: openrouter
+          # model: mistralai/mistral-large-4-0
+          # openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+
+          # Codex counts tokens, not dollars. To enforce each test's budget_usd
+          # it needs the model's prices, in USD per million tokens. Without them
+          # a Codex run with a budget stops before any agent starts.
+          # EDIT ME — these are the listed prices of gpt-6-astra, September 2026.
+          # For Mistral Large 4 use "0.68" and "2.09".
+          price-input-per-million: "10.00"
+          price-output-per-million: "50.00"
 
       - uses: actions/upload-artifact@v7
         with:

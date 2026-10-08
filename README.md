@@ -54,6 +54,9 @@ jobs:
         with:
           test-paths: tests
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-6-astra
+          price-input-per-million: "10.00" # USD per million tokens, see Budgets with Codex
+          price-output-per-million: "50.00"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -192,6 +195,15 @@ Set `hard-fail: false` when you do that, or the job dies before your step runs.
 
 Codex counts tokens, not dollars. To enforce `budget_usd` it needs the model's
 prices, so a Codex run with a budget and no prices stops before any agent runs.
+
+Set `model` as well. Codex's default model changes between versions, and the
+prices must match the model that runs. Prices as listed in September 2026, USD
+per million tokens; check your provider's page before you rely on them:
+
+| Model                          | Input | Output |
+| ------------------------------ | ----: | -----: |
+| `gpt-6-astra`                  | 10.00 |  50.00 |
+| `mistralai/mistral-large-4-0`  |  0.68 |   2.09 |
 
 ```yaml
 with:
