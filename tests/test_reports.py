@@ -301,3 +301,29 @@ def test_transcript_never_silently_drops_an_event_it_does_not_know():
 
     assert "sandbox_denial" in out
     assert "landlock unavailable" in out
+
+
+def test_traces_appear_folded_in_the_overview_and_open_in_the_full_report():
+    from llm_fuzz_ci.schema import sanitize_target_id
+
+    traces = {sanitize_target_id(TARGET): f"# {TARGET}\n\nThe agent read divide()."}
+    cases = [case(input_value={"x": 1})]
+
+    overview = render(cases=cases, traces=traces, fold=True)
+    full = render(cases=cases, traces=traces)
+
+    assert "## Agent traces" in overview
+    assert "agent trace</summary>" in overview
+    assert "The agent read divide()." in overview
+    assert "### `test_divide`" in full
+    assert "The agent read divide()." in full
+
+
+def test_a_trace_over_the_budget_is_dropped_whole():
+    from llm_fuzz_ci.schema import sanitize_target_id
+
+    traces = {sanitize_target_id(TARGET): "z" * 50_000}
+    out = render(cases=[case(input_value={"x": 1})], traces=traces, fold=True, max_bytes=10_000)
+
+    assert "z" * 100 not in out
+    assert "1 more trace(s) — see the artifact." in out

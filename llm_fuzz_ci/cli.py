@@ -406,6 +406,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             test_report=read_json(args.report),
             usage_report=read_json(args.usage_report),
             barren=read_json(BARREN_REPORT) or None,
+            traces=load_traces(TRACES),
             fold=overview,
             max_bytes=SUMMARY_BYTES if overview else None,
         )
@@ -425,6 +426,17 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"{failed} generated input(s) failed a marked test.", file=sys.stderr)
         return 1
     return 0
+
+
+def load_traces(trace_dir: str | Path) -> dict[str, str]:
+    """Read the agent transcripts, keyed by sanitized target id."""
+    root = Path(trace_dir)
+    if not root.is_dir():
+        return {}
+    return {
+        path.stem: path.read_text(encoding="utf-8", errors="replace")
+        for path in sorted(root.glob("*.md"))
+    }
 
 
 def names(value: str) -> list[str]:

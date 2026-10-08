@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .schema import sanitize_target_id
+
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 # GitHub discards a step summary over 1 MiB and annotates the run with an error.
@@ -48,6 +50,7 @@ def render(
     test_report: dict[str, Any] | None = None,
     usage_report: dict[str, Any] | None = None,
     barren: dict[str, str] | None = None,
+    traces: dict[str, str] | None = None,
     fold: bool = False,
     max_bytes: int | None = None,
 ) -> str:
@@ -56,6 +59,9 @@ def render(
     `fold` hides each test's inputs behind a collapsed section and `max_bytes`
     caps the total; that pair is what the GitHub Actions run summary wants.
     The downloadable artifact wants neither.
+
+    `traces` maps a sanitized target id to the agent's readable transcript. It
+    is written last, so the inputs keep the byte allowance first.
     """
     entries = merge(cases, test_report)
     barren = barren or {}
@@ -77,6 +83,7 @@ def render(
     lines += barren_section(barren)
     lines += failures_section(failures, budget)
     lines += inputs_section(by_target(entries), fold, budget)
+    lines += traces_section(traces or {}, [*by_target(entries), *barren.items()], fold, budget)
     if fold:
         lines.append(ARTIFACT_HINT)
     return utf8_safe("\n".join(lines).rstrip())
@@ -284,6 +291,49 @@ def inputs_section(
         lines += blocks + omitted(len(group) - shown)
         if fold:
             lines += ["</details>", ""]
+    return lines
+
+
+def traces_section(
+    traces: dict[str, str],
+    targets: list[Any],
+    fold: bool,
+    budget: Budget,
+) -> list[str]:
+    """What the agent read, ran and concluded, one section per test."""
+    lines: list[str] = []
+    dropped = 0
+    seen: set[str] = set()
+    for item in targets:
+        target_id = item[0]
+        key = sanitize_target_id(target_id)
+        text = traces.get(key)
+        if text is None or key in seen:
+            continue
+        seen.add(key)
+        text = re.sub(r"\A# .*\n+", "", utf8_safe(text)).strip()
+        name = short_target(target_id)
+        if fold:
+            block = [
+                "<details>",
+                f"<summary><code>{escape_html(name)}</code> — agent trace</summary>",
+                "",
+                text,
+                "",
+                "</details>",
+                "",
+            ]
+        else:
+            block = [f"### `{name}`", "", text, ""]
+        if budget.take(block):
+            lines += block
+        else:
+            dropped += 1
+    if not lines and not dropped:
+        return []
+    lines = ["## Agent traces", ""] + lines
+    if dropped:
+        lines += [f"_{dropped} more trace(s) — see the artifact._", ""]
     return lines
 
 
