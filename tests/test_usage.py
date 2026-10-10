@@ -1,6 +1,10 @@
 import json
 
+from llm_fuzz_ci import generator
+from llm_fuzz_ci.generator import GenerationError, generate_cases, with_estimated_cost
+from llm_fuzz_ci.schema import FuzzTarget
 from llm_fuzz_ci.usage import (
+    LLMUsage,
     extract_usage_from_json_events,
     format_usage_summary,
     write_usage_report,
@@ -57,7 +61,7 @@ def test_extracts_claude_style_token_usage():
     assert usage.total_tokens == 165
 
 
-def test_usage_summary_and_report_are_token_only(tmp_path):
+def test_usage_summary_and_report_have_no_cost_when_none_is_known(tmp_path):
     usage = extract_usage_from_json_events(
         json.dumps({"usage": {"input_tokens": 10, "output_tokens": 5}}),
         provider="openai",
@@ -121,3 +125,51 @@ def test_per_event_usage_without_a_running_total_is_summed():
     usage = extract_usage_from_json_events(stream, provider="openai", model=None)
 
     assert (usage.input_tokens, usage.output_tokens) == (30, 2)
+
+
+def test_claude_cost_is_read_and_summed_across_runs():
+    run = json.dumps(
+        {
+            "total_cost_usd": 0.25,
+            "usage": {"input_tokens": 100, "output_tokens": 10},
+            "modelUsage": {"m": {"costUSD": 0.25}},
+        }
+    )
+    first = extract_usage_from_json_events(run, provider="anthropic", model="m")
+    second = extract_usage_from_json_events(run, provider="anthropic", model="m")
+    assert first is not None and second is not None
+    assert first.cost_usd == 0.25
+
+    first.add(second)
+
+    assert first.cost_usd == 0.5
+    assert "cost: $0.50" in format_usage_summary(first)
+    assert first.to_dict()["cost_usd"] == 0.5
+
+
+def test_a_codex_run_is_priced_from_the_model_prices():
+    usage = LLMUsage(provider="openai", input_tokens=1_000_000, output_tokens=100_000)
+
+    priced = with_estimated_cost(usage, (2.0, 10.0))
+
+    assert priced is usage
+    assert usage.cost_usd == 3.0
+    assert with_estimated_cost(None, (2.0, 10.0)) is None
+    assert with_estimated_cost(LLMUsage(provider="openai"), None).cost_usd is None
+
+
+def test_a_failed_run_still_counts_its_cost(monkeypatch, tmp_path):
+    failed = LLMUsage(provider="anthropic", input_tokens=5, total_tokens=5, cost_usd=0.69)
+
+    def fail(*args, **kwargs):
+        raise GenerationError("budget", failed)
+
+    monkeypatch.setattr(generator, "generate_with_claude", fail)
+    target = FuzzTarget(id="t::a", target="pytest::t::a", budget_usd=0.5, params=["x"])
+
+    result = generate_cases(
+        [target], agent="claude", repo_root=tmp_path, capture_usage=True
+    )
+
+    assert list(result.failures) == ["t::a"]
+    assert result.usage is not None and result.usage.cost_usd == 0.69

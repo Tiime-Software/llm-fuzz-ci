@@ -205,6 +205,8 @@ def run_facts(
         usage = usage_report.get("usage")
         if isinstance(usage, dict) and usage.get("total_tokens"):
             facts.append(f"{usage['total_tokens']:,} tokens")
+        if isinstance(usage, dict) and isinstance(usage.get("cost_usd"), (int, float)):
+            facts.append(f"${usage['cost_usd']:.2f}")
     return [" · ".join(facts), ""] if facts else []
 
 

@@ -19,7 +19,20 @@ from .schema import (
     make_case,
     sanitize_target_id,
 )
-from .usage import LLMUsage, extract_usage_from_json_events
+from .usage import LLMUsage, estimate_cost, extract_usage_from_json_events
+
+
+class GenerationError(RuntimeError):
+    """An agent run that failed, with the usage it had already cost.
+
+    A run that ran out of budget is the most expensive kind, so its tokens and
+    dollars belong in the totals.
+    """
+
+    def __init__(self, message: str, usage: LLMUsage | None = None):
+        super().__init__(message)
+        self.usage = usage
+
 
 @dataclass
 class Generated:
@@ -98,6 +111,7 @@ def generate_cases(
             # Targets are independent. Losing one must not discard the inputs
             # already paid for, nor stop the targets after it.
             failures[target.id] = str(exc)
+            usage = merge_usage(usage, getattr(exc, "usage", None))
             continue
         cases.extend(result.cases)
         skipped.extend(result.skipped)
@@ -170,6 +184,15 @@ def codex_prices(
             "price-output-per-million inputs."
         )
     return price_input, price_output
+
+
+def with_estimated_cost(
+    usage: LLMUsage | None, prices: tuple[float, float] | None
+) -> LLMUsage | None:
+    """Codex does not report dollars, so price its tokens when prices are set."""
+    if usage is not None and usage.cost_usd is None and prices is not None:
+        usage.cost_usd = estimate_cost(usage, *prices)
+    return usage
 
 
 def merge_usage(total: LLMUsage | None, item: LLMUsage | None) -> LLMUsage | None:
@@ -251,8 +274,20 @@ def generate_with_codex(
             check=False,
         )
         save_trace(trace_dir, target, completed.stdout, completed.stderr)
+        run_usage = (
+            with_estimated_cost(
+                extract_usage_from_json_events(
+                    completed.stdout,
+                    provider=usage_provider(provider),
+                    model=model,
+                ),
+                prices,
+            )
+            if capture_usage
+            else None
+        )
         if completed.returncode != 0:
-            raise RuntimeError(describe_failure("Codex", cmd, completed))
+            raise GenerationError(describe_failure("Codex", cmd, completed), run_usage)
 
         output_text = (
             output_path.read_text(encoding="utf-8")
@@ -260,17 +295,7 @@ def generate_with_codex(
             else completed.stdout
         )
         cases, skipped = parse_agent_cases(output_text, target)
-        return Generated(
-            cases,
-            extract_usage_from_json_events(
-                completed.stdout,
-                provider=usage_provider(provider),
-                model=model,
-            )
-            if capture_usage
-            else None,
-            skipped,
-        )
+        return Generated(cases, run_usage, skipped)
 
 
 def generate_with_claude(
@@ -302,20 +327,19 @@ def generate_with_claude(
         check=False,
     )
     save_trace(trace_dir, target, completed.stdout, completed.stderr)
-    if completed.returncode != 0:
-        raise RuntimeError(describe_failure("Claude", cmd, completed))
-    cases, skipped = parse_agent_cases(completed.stdout, target)
-    return Generated(
-        cases,
+    run_usage = (
         extract_usage_from_json_events(
             completed.stdout,
             provider="anthropic",
             model=model,
         )
         if capture_usage
-        else None,
-        skipped,
+        else None
     )
+    if completed.returncode != 0:
+        raise GenerationError(describe_failure("Claude", cmd, completed), run_usage)
+    cases, skipped = parse_agent_cases(completed.stdout, target)
+    return Generated(cases, run_usage, skipped)
 
 
 def claude_command(

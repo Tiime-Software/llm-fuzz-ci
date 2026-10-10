@@ -17,8 +17,13 @@ class LLMUsage:
     output_tokens: int = 0
     reasoning_output_tokens: int = 0
     total_tokens: int = 0
+    # Dollars spent, when known: the agent's own figure (Claude Code reports
+    # `total_cost_usd`) or an estimate from the model prices (Codex).
+    cost_usd: float | None = None
 
     def add(self, other: "LLMUsage") -> None:
+        if other.cost_usd is not None:
+            self.cost_usd = (self.cost_usd or 0.0) + other.cost_usd
         self.input_tokens += other.input_tokens
         self.cached_input_tokens += other.cached_input_tokens
         self.output_tokens += other.output_tokens
@@ -26,7 +31,10 @@ class LLMUsage:
         self.total_tokens += other.total_tokens
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        if data["cost_usd"] is None:
+            del data["cost_usd"]
+        return data
 
 
 def format_usage_summary(usage: LLMUsage | None) -> str:
@@ -48,6 +56,8 @@ def format_usage_summary(usage: LLMUsage | None) -> str:
             f"  total tokens: {usage.total_tokens}",
         ]
     )
+    if usage.cost_usd is not None:
+        lines.append(f"  cost: ${usage.cost_usd:.2f}")
     return "\n".join(lines)
 
 
@@ -94,7 +104,10 @@ def extract_usage_from_json_events(
 
     running = [found for event in events for found in cumulative_usage(event)]
     if running:
-        return usage_from_dict(running[-1], provider=provider, model=model)
+        usage = usage_from_dict(running[-1], provider=provider, model=model)
+        if usage is not None:
+            usage.cost_usd = sum_costs(reported_cost(event) for event in events)
+        return usage
 
     total: LLMUsage | None = None
     for event in events:
@@ -102,6 +115,7 @@ def extract_usage_from_json_events(
         item = usage_from_dict(data, provider=provider, model=model) if data else None
         if item is None:
             continue
+        item.cost_usd = reported_cost(event)
         if total is None:
             total = item
         else:
@@ -110,6 +124,29 @@ def extract_usage_from_json_events(
     if total and total.total_tokens == 0:
         total.total_tokens = total.input_tokens + total.output_tokens
     return total
+
+
+def reported_cost(event: Any) -> float | None:
+    """The dollars an agent says one run cost (Claude Code: `total_cost_usd`)."""
+    if isinstance(event, dict):
+        value = event.get("total_cost_usd")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    return None
+
+
+def sum_costs(costs: Any) -> float | None:
+    known = [cost for cost in costs if cost is not None]
+    return sum(known) if known else None
+
+
+def estimate_cost(usage: LLMUsage, price_input: float, price_output: float) -> float:
+    """Dollars from the model prices (USD per million tokens).
+
+    Cached input is billed lower than this assumes, so the figure is an upper
+    bound.
+    """
+    return (usage.input_tokens * price_input + usage.output_tokens * price_output) / 1_000_000
 
 
 def cumulative_usage(value: Any) -> list[dict[str, Any]]:

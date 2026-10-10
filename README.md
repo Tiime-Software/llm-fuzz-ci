@@ -142,7 +142,7 @@ def test_transfer(llm_fuzz_case):
 | `price-input-per-million`  |   | Codex: model price, USD per million input tokens |
 | `price-output-per-million` |   | Codex: model price, USD per million output tokens |
 | `timeout-seconds`    | `600`   | maximum generation time per target           |
-| `show-usage`         | `false` | print the agent's token usage                |
+| `show-usage`         | `false` | print the agent's token usage and cost       |
 
 `llm-fuzz-ci report`, step 3:
 
@@ -169,7 +169,7 @@ The `llm-fuzz-ci` artifact holds the whole run:
 | `targets.json`                  | the marked tests it was pointed at              |
 | `reports/llm-fuzz-ci-report.md` | the same summary, unfolded                      |
 | `reports/test-report.json`      | one record per input, for processing            |
-| `reports/llm-usage.json`        | tokens spent                                    |
+| `reports/llm-usage.json`        | tokens and dollars spent                        |
 | `reports/agent-trace/`          | per test, what the agent reasoned, ran, and saw |
 
 All of the following are off unless you turn them on.
